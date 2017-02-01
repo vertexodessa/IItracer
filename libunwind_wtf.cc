@@ -19,16 +19,42 @@ namespace
     using EventPtr = shared_ptr<Event>;
     using Scope = ::wtf::AutoScopeIf<kWtfEnabledForNamespace>;
     using ScopePtr = unique_ptr< Scope >;
-    
-    map<string, queue<ScopePtr>> gMap {};
-    set<string> gFuncNames {};
 
-    inline std::string getName(void* caller) __attribute__((no_instrument_function));
-    inline std::string getName(void* caller)
+    // Avoid profiling until STL initialized
+    int gCanProfile {0}; 
+
+    inline unordered_map<string, queue<ScopePtr>>& gMap() __attribute__((no_instrument_function));
+    inline unordered_map<string, queue<ScopePtr>>& gMap()
     {
-        std::size_t this_id = std::hash<std::thread::id>{}(std::this_thread::get_id());
+        thread_local unordered_map<string, queue<ScopePtr>> tlMap {};
+        return tlMap;
+    };
 
-        return to_string((intptr_t)caller) + "." + to_string(this_id);
+    inline map<void*, string>& gFuncNamesMap() __attribute__((no_instrument_function));
+    inline map<void*, string>& gFuncNamesMap()
+    {
+        thread_local map<void*, string> tlFuncNamesMap {};
+        return tlFuncNamesMap;
+    };
+
+    inline void ensureName(void* caller) __attribute__((no_instrument_function));
+    inline void ensureName(void* caller)
+    {
+        if (gFuncNamesMap().find(caller) != gFuncNamesMap().end())
+            return;
+
+        unw_context_t ctx;
+        unw_cursor_t c;
+        unw_getcontext(&ctx);
+        unw_init_local(&c, &ctx);
+        unw_step(&c);
+        unw_step(&c);
+
+        thread_local char name[300];
+        unw_word_t offset;
+        unw_get_proc_name(&c, name, 200, &offset);
+
+        gFuncNamesMap()[caller] = name;
     }
 }
 
@@ -36,48 +62,37 @@ extern "C" {
 void __cyg_profile_func_enter (void *, void *) __attribute__((no_instrument_function));
 void __cyg_profile_func_exit (void *, void *) __attribute__((no_instrument_function));
 
-int gCanProfile {0};
-    
 void __cyg_profile_func_enter (void *func,  void *caller)
 {
      if(!gCanProfile)
          return;
      WTF_AUTO_THREAD_ENABLE();
 
-     string name(getName(caller));
+     ensureName(caller);
 
-     // LEAK
-     string* nn;
-     if(gFuncNames.find(name) != gFuncNames.end())
-     {
-         nn = (string*)&(*gFuncNames.find(name));
-     }
-     else
-     {
-         nn = new string(name);
-         gFuncNames.insert(*nn);
-     }
-     
-     ::wtf::ScopedEventIf<kWtfEnabledForNamespace>  __wtf_scope_event0_35{nn->c_str()};
+     ::wtf::ScopedEventIf<kWtfEnabledForNamespace>  __wtf_scope_event0_35{gFuncNamesMap()[caller].c_str()};
      ScopePtr s(new Scope(__wtf_scope_event0_35));
      s->Enter();
 
-     gMap[name].emplace(std::move(s));
+     gMap()[gFuncNamesMap()[caller]].emplace(std::move(s));
 }
 
 void __cyg_profile_func_exit (void *func, void *caller)
 {
     if (!gCanProfile)
         return;
-    WTF_AUTO_THREAD_ENABLE();
-    string name(getName(caller));
 
-    gMap[name].pop();
+    WTF_AUTO_THREAD_ENABLE();
+
+    gMap()[gFuncNamesMap()[caller]].pop();
 }
 } //extern C
 
 void bar(void)
 {
+    static int count = 10;
+    if (--count > 0)
+        bar();
 }
 
 void foo (void)
