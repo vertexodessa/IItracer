@@ -29,23 +29,6 @@ namespace
         std::size_t this_id = std::hash<std::thread::id>{}(std::this_thread::get_id());
 
         return to_string((intptr_t)caller) + "." + to_string(this_id);
-        // unw_context_t ctx;
-        // unw_cursor_t c;
-        // unw_getcontext(&ctx);
- 
-        // unw_init_local(&c, &ctx);
-        // unw_step(&c);
-        // unw_step(&c);
-
-        // char name[300];
-        // unw_word_t offset;
-        // unw_get_proc_name(&c, name, 200, &offset);
-
-
-        // std::size_t this_id = std::hash<std::thread::id>{}(std::this_thread::get_id());
-        // std::string fullname(name);
-        // fullname += std::to_string(this_id);
-        // return fullname;
     }
 }
 
@@ -80,19 +63,6 @@ void __cyg_profile_func_enter (void *func,  void *caller)
      s->Enter();
 
      gMap[name].emplace(std::move(s));
-     //cout << ">>>" << gMap[name].size() <<name << '\n';
-
-     //WTF_SCOPE0("aaaaa");
-
-     // wtf::ScopedEventIf<kWtfEnabledForNamespace> event_(name.c_str());
-    
-     // event_.Enter();
-     // event_.Leave();
-
-     // // WTF_SCOPED_EVENT0 :
-     // static ::wtf::ScopedEventIf<kWtfEnabledForNamespace>  __wtf_scope_event0_35{"asd"};
-     // ::wtf::AutoScopeIf<kWtfEnabledForNamespace>  __wtf_scope0_35{ __wtf_scope_event0_35};
-     // __wtf_scope0_35.Enter();
 }
 
 void __cyg_profile_func_exit (void *func, void *caller)
@@ -103,7 +73,6 @@ void __cyg_profile_func_exit (void *func, void *caller)
     string name(getName(caller));
 
     gMap[name].pop();
-    //cout << "<<< " << gMap[name].size()<<name << '\n';
 }
 } //extern C
 
