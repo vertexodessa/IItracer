@@ -3,7 +3,7 @@
 INSTR = \
 -finstrument-functions \
 -finstrument-functions-exclude-file-list=/usr/  \
--finstrument-functions-exclude-function-list=static_initialization_and_destruction,bar
+-finstrument-functions-exclude-function-list=static_initialization_and_destruction
 
 LIBS = -Wl,-lunwind -Wl,-lwtf -Wl,-rpath=/usr/local/lib/
 LIBS += -pthread
