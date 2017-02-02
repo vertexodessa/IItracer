@@ -31,8 +31,8 @@ using namespace std;
 namespace
 {
 using Event    = ::wtf::ScopedEventIf<kWtfEnabledForNamespace>;
-using EventPtr = shared_ptr<Event>;
 using Scope    = ::wtf::AutoScopeIf<kWtfEnabledForNamespace>;
+using EventPtr = shared_ptr<Event>;
 using ScopePtr = unique_ptr<Scope>;
 
 inline unordered_map<string, queue<ScopePtr>>& gMap() __attribute__((no_instrument_function));
@@ -73,26 +73,27 @@ inline void ensureFunctionName(void* caller)
 }
 }
 
-extern "C" {
-    void __cyg_profile_func_enter (void *, void *) __attribute__((no_instrument_function));
-    void __cyg_profile_func_enter (void *func,  void *caller)
-    {
-        WTF_AUTO_THREAD_ENABLE();
+extern "C"
+{
+void __cyg_profile_func_enter (void *, void *) __attribute__((no_instrument_function));
+void __cyg_profile_func_enter (void *func,  void *caller)
+{
+    WTF_AUTO_THREAD_ENABLE();
 
-        ensureFunctionName(caller);
+    ensureFunctionName(caller);
 
-        ::wtf::ScopedEventIf<kWtfEnabledForNamespace> __wtf_scope_event0_35{gFuncNamesMap()[caller].c_str()};
-        ScopePtr s(new Scope(__wtf_scope_event0_35));
-        s->Enter();
+    ::wtf::ScopedEventIf<kWtfEnabledForNamespace> __wtf_scope_event0_35{gFuncNamesMap()[caller].c_str()};
+    ScopePtr s(new Scope(__wtf_scope_event0_35));
+    s->Enter();
 
-        gMap()[gFuncNamesMap()[caller]].emplace(std::move(s));
-    }
+    gMap()[gFuncNamesMap()[caller]].emplace(std::move(s));
+}
 
-    void __cyg_profile_func_exit (void *, void *) __attribute__((no_instrument_function));
-    void __cyg_profile_func_exit (void *func, void *caller)
-    {
-        gMap()[gFuncNamesMap()[caller]].pop();
-    }
+void __cyg_profile_func_exit (void *, void *) __attribute__((no_instrument_function));
+void __cyg_profile_func_exit (void *func, void *caller)
+{
+    gMap()[gFuncNamesMap()[caller]].pop();
+}
 } //extern C
 
 void bar()
@@ -110,7 +111,7 @@ void foo()
 }
 
 // FIXME: move main() to a separate file
-int main (int argc, char *argv[])
+    int main (int argc, char *argv[])
 {
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
