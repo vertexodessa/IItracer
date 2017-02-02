@@ -1,3 +1,16 @@
+
+/*
+  ---------------------------------------------------------------------------------
+  FIXME: Consider avoiding using STL in this instrumentation. Which
+  might improve performance
+
+  FIXME: Try to avoid current requirement of
+  -finstrument-functions-exclude-file-list=/usr/
+  -finstrument-functions-exclude-function-list=static_initialization_and_destruction
+  ---------------------------------------------------------------------------------
+*/
+
+
 #include <algorithm>
 #include <queue>
 #include <map>
