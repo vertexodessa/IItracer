@@ -1,4 +1,4 @@
-#include <stdio.h>
+//#include <stdio.h>
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
 #include <vector>
@@ -18,14 +18,15 @@ namespace
     using Event = ::wtf::ScopedEventIf<kWtfEnabledForNamespace>;
     using EventPtr = shared_ptr<Event>;
     using Scope = ::wtf::AutoScopeIf<kWtfEnabledForNamespace>;
-    using ScopePtr = unique_ptr< Scope >;
+    using ScopePtr = unique_ptr<Scope>;
 
-    // Avoid profiling until STL initialized
-    int gCanProfile {0}; 
+    // Avoid profiling until STL is initialized
+    // int gCanProfile {0}; 
 
     inline unordered_map<string, queue<ScopePtr>>& gMap() __attribute__((no_instrument_function));
     inline unordered_map<string, queue<ScopePtr>>& gMap()
     {
+        // TODO: measure timings with rwlock and compare
         thread_local unordered_map<string, queue<ScopePtr>> tlMap {};
         return tlMap;
     };
@@ -33,16 +34,18 @@ namespace
     inline map<void*, string>& gFuncNamesMap() __attribute__((no_instrument_function));
     inline map<void*, string>& gFuncNamesMap()
     {
+        // TODO: measure timings with rwlock and compare
         thread_local map<void*, string> tlFuncNamesMap {};
         return tlFuncNamesMap;
     };
 
-    inline void ensureName(void* caller) __attribute__((no_instrument_function));
-    inline void ensureName(void* caller)
+    inline void ensureFunctionName(void* caller) __attribute__((no_instrument_function));
+    inline void ensureFunctionName(void* caller)
     {
         if (gFuncNamesMap().find(caller) != gFuncNamesMap().end())
             return;
 
+// FIXME: handle errors appropriately
         unw_context_t ctx;
         unw_cursor_t c;
         unw_getcontext(&ctx);
@@ -50,7 +53,7 @@ namespace
         unw_step(&c);
         unw_step(&c);
 
-        thread_local char name[300];
+        thread_local char name[200];
         unw_word_t offset;
         unw_get_proc_name(&c, name, 200, &offset);
 
@@ -64,11 +67,12 @@ void __cyg_profile_func_exit (void *, void *) __attribute__((no_instrument_funct
 
 void __cyg_profile_func_enter (void *func,  void *caller)
 {
-     if(!gCanProfile)
-         return;
+     // if(!gCanProfile)
+     //     return;
+ 
      WTF_AUTO_THREAD_ENABLE();
 
-     ensureName(caller);
+     ensureFunctionName(caller);
 
      ::wtf::ScopedEventIf<kWtfEnabledForNamespace>  __wtf_scope_event0_35{gFuncNamesMap()[caller].c_str()};
      ScopePtr s(new Scope(__wtf_scope_event0_35));
@@ -79,8 +83,8 @@ void __cyg_profile_func_enter (void *func,  void *caller)
 
 void __cyg_profile_func_exit (void *func, void *caller)
 {
-    if (!gCanProfile)
-        return;
+    // if (!gCanProfile)
+    //     return;
 
     WTF_AUTO_THREAD_ENABLE();
 
@@ -90,7 +94,7 @@ void __cyg_profile_func_exit (void *func, void *caller)
 
 void bar(void)
 {
-    static int count = 10;
+    static atomic<int> count {1000};
     if (--count > 0)
         bar();
 }
@@ -102,14 +106,31 @@ void foo (void)
         bar ();
 }
 
+#include <chrono>
+
 int main (int argc, char *argv[])
 {
-    gCanProfile = 1;
+    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+    
+    //gCanProfile = 1;
+    std::thread t(foo);
+    std::thread t1(foo);
+    
     foo ();
     bar ();
 
-    gCanProfile = 0;
+    t.join();
+    t1.join();
+
+    std::chrono::steady_clock::time_point end= std::chrono::steady_clock::now();
+
+    std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() <<std::endl;
+
+
+
+    //gCanProfile = 0;
     wtf::Runtime::GetInstance()->SaveToFile("tmptestbuf_clearafter.wtf-trace");
+
 
     return 0;
 }
