@@ -28,33 +28,32 @@
 #include <wtf/macros.h>
 
 using namespace std;
-namespace
-{
+namespace {
 using Event    = ::wtf::ScopedEventIf<kWtfEnabledForNamespace>;
 using Scope    = ::wtf::AutoScopeIf<kWtfEnabledForNamespace>;
 using EventPtr = shared_ptr<Event>;
 using ScopePtr = unique_ptr<Scope>;
 
-inline unordered_map<string, queue<ScopePtr>>& gMap() __attribute__((no_instrument_function));
-inline unordered_map<string, queue<ScopePtr>>& gMap()
+inline unordered_map<string, queue<ScopePtr>>& ScopeMap() __attribute__((no_instrument_function));
+inline unordered_map<string, queue<ScopePtr>>& ScopeMap()
 {
     // TODO: measure timings with rwlock and compare
     thread_local unordered_map<string, queue<ScopePtr>> tlMap {};
     return tlMap;
 };
 
-inline map<void*, string>& gFuncNamesMap() __attribute__((no_instrument_function));
-inline map<void*, string>& gFuncNamesMap()
+inline map<void*, string>& FuncNamesMap() __attribute__((no_instrument_function));
+inline map<void*, string>& FuncNamesMap()
 {
     // TODO: measure timings with rwlock and compare
     thread_local map<void*, string> tlFuncNamesMap {};
     return tlFuncNamesMap;
 };
 
-inline void ensureFunctionName(void* caller) __attribute__((no_instrument_function));
-inline void ensureFunctionName(void* caller)
+inline void EnsureFunctionNameInCache(void* caller) __attribute__((no_instrument_function));
+inline void EnsureFunctionNameInCache(void* caller)
 {
-    if (gFuncNamesMap().find(caller) != gFuncNamesMap().end())
+    if (FuncNamesMap().find(caller) != FuncNamesMap().end())
         return;
 
     // FIXME: handle errors appropriately
@@ -69,32 +68,31 @@ inline void ensureFunctionName(void* caller)
     unw_word_t offset;
     unw_get_proc_name(&c, name, 200, &offset);
 
-    gFuncNamesMap()[caller] = name;
+    FuncNamesMap()[caller] = name;
 }
 }
 
-extern "C"
-{
+extern "C" {
 void __cyg_profile_func_enter (void *func,  void *caller)
 {
     WTF_AUTO_THREAD_ENABLE();
 
-    ensureFunctionName(caller);
+    EnsureFunctionNameInCache(caller);
 
-    ::wtf::ScopedEventIf<kWtfEnabledForNamespace> __wtf_scope_event0_35{gFuncNamesMap()[caller].c_str()};
+    ::wtf::ScopedEventIf<kWtfEnabledForNamespace> __wtf_scope_event0_35{FuncNamesMap()[caller].c_str()};
     ScopePtr s(new Scope(__wtf_scope_event0_35));
     s->Enter();
 
-    gMap()[gFuncNamesMap()[caller]].emplace(std::move(s));
+    ScopeMap()[FuncNamesMap()[caller]].emplace(std::move(s));
 }
 
 void __cyg_profile_func_exit (void *func, void *caller)
 {
-    gMap()[gFuncNamesMap()[caller]].pop();
+    ScopeMap()[FuncNamesMap()[caller]].pop();
 }
 } //extern C
 
-void saveProfiling(const char* filename)
+void SaveTraceData(const char* filename)
 {
     ::wtf::Runtime::GetInstance()->SaveToFile(filename);
 }
