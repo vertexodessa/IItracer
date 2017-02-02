@@ -1,4 +1,3 @@
-
 /*
   ---------------------------------------------------------------------------------
   FIXME: Consider avoiding using STL in this instrumentation. Which
@@ -10,6 +9,7 @@
   ---------------------------------------------------------------------------------
 */
 
+#include "libunwind_wtf.h"
 
 #include <algorithm>
 #include <queue>
@@ -75,7 +75,6 @@ inline void ensureFunctionName(void* caller)
 
 extern "C"
 {
-void __cyg_profile_func_enter (void *, void *) __attribute__((no_instrument_function));
 void __cyg_profile_func_enter (void *func,  void *caller)
 {
     WTF_AUTO_THREAD_ENABLE();
@@ -89,45 +88,13 @@ void __cyg_profile_func_enter (void *func,  void *caller)
     gMap()[gFuncNamesMap()[caller]].emplace(std::move(s));
 }
 
-void __cyg_profile_func_exit (void *, void *) __attribute__((no_instrument_function));
 void __cyg_profile_func_exit (void *func, void *caller)
 {
     gMap()[gFuncNamesMap()[caller]].pop();
 }
 } //extern C
 
-void bar()
+void saveProfiling(const char* filename)
 {
-    static atomic<int> count {1000};
-    if (--count > 0)
-        bar();
-}
-
-void foo()
-{
-    int x;
-    for(x = 0; x < 4; x++)
-        bar ();
-}
-
-// FIXME: move main() to a separate file
-    int main (int argc, char *argv[])
-{
-    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-
-    vector<thread> v;
-    for(int i=0; i<10; ++i)
-        v.emplace_back(foo);
-
-    foo();
-    bar();
-
-    for_each(v.begin(), v.end(), [](thread& f) { f.join(); });
-
-    std::chrono::steady_clock::time_point end= std::chrono::steady_clock::now();
-    std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() <<std::endl;
-
-    ::wtf::Runtime::GetInstance()->SaveToFile("tmptestbuf_clearafter.wtf-trace");
-
-    return 0;
+    ::wtf::Runtime::GetInstance()->SaveToFile(filename);
 }
