@@ -6,6 +6,9 @@
   FIXME: Try to avoid current requirement of
   -finstrument-functions-exclude-file-list=/usr/
   -finstrument-functions-exclude-function-list=static_initialization_and_destruction
+
+  FIXME: symbol visibility
+
   ---------------------------------------------------------------------------------
 */
 
@@ -23,9 +26,6 @@
 
 #define WTF_ENABLE 1
 #include <wtf/macros.h>
-
-// not needed for profiling to function. Just for main().
-#include <chrono>
 
 using namespace std;
 namespace
