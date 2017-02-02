@@ -1,7 +1,0 @@
-[
-    {
-        "command": "c++ -c -std=c++11 -g2 -finstrument-functions -finstrument-functions-exclude-file-list=/usr/ -Wl,-lunwind -Wl,-ldl /home/ihor/MEGAsync/cpp/experiments/libunwind_wtf.cc",
-        "directory": "/home/ihor/MEGAsync/cpp/experiments",
-        "file": "/home/ihor/MEGAsync/cpp/experiments/libunwind_wtf.cc"
-    }
-]
