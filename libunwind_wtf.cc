@@ -1,13 +1,13 @@
 /*
   ---------------------------------------------------------------------------------
-  FIXME: Consider avoiding using STL in this instrumentation. Which
+  FIXME(vertexodessa): Consider avoiding using STL in this instrumentation. Which
   might improve performance
 
-  FIXME: Try to avoid current requirement of
+  FIXME(vertexodessa): Try to avoid current requirement of
   -finstrument-functions-exclude-file-list=/usr/
   -finstrument-functions-exclude-function-list=static_initialization_and_destruction
 
-  FIXME: symbol visibility
+  FIXME(vertexodessa): symbol visibility
 
   ---------------------------------------------------------------------------------
 */
@@ -15,11 +15,13 @@
 #include "libunwind_wtf.h"
 
 #include <algorithm>
+#include <memory>
 #include <queue>
-#include <map>
 #include <set>
+#include <string>
+#include <unordered_map>
+#include <utility>
 #include <vector>
-#include <thread>
 
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
@@ -35,28 +37,25 @@ using EventPtr = shared_ptr<Event>;
 using ScopePtr = unique_ptr<Scope>;
 
 inline unordered_map<string, queue<ScopePtr>>& ScopeMap() __attribute__((no_instrument_function));
-inline unordered_map<string, queue<ScopePtr>>& ScopeMap()
-{
-    // TODO: measure timings with rwlock and compare
+inline unordered_map<string, queue<ScopePtr>>& ScopeMap() {
+    // TODO(vertexodessa): measure timings with rwlock and compare
     thread_local unordered_map<string, queue<ScopePtr>> tlMap {};
     return tlMap;
-};
+}
 
-inline map<void*, string>& FuncNamesMap() __attribute__((no_instrument_function));
-inline map<void*, string>& FuncNamesMap()
-{
-    // TODO: measure timings with rwlock and compare
-    thread_local map<void*, string> tlFuncNamesMap {};
+inline unordered_map<void*, string>& FuncNamesMap() __attribute__((no_instrument_function));
+inline unordered_map<void*, string>& FuncNamesMap() {
+    // TODO(vertexodessa): measure timings with rwlock and compare
+    thread_local unordered_map<void*, string> tlFuncNamesMap {};
     return tlFuncNamesMap;
-};
+}
 
 inline void EnsureFunctionNameInCache(void* caller) __attribute__((no_instrument_function));
-inline void EnsureFunctionNameInCache(void* caller)
-{
+inline void EnsureFunctionNameInCache(void* caller) {
     if (FuncNamesMap().find(caller) != FuncNamesMap().end())
         return;
 
-    // FIXME: handle errors appropriately
+    // FIXME(vertexodessa): handle errors appropriately
     unw_context_t ctx;
     unw_cursor_t c;
     unw_getcontext(&ctx);
@@ -70,11 +69,10 @@ inline void EnsureFunctionNameInCache(void* caller)
 
     FuncNamesMap()[caller] = name;
 }
-}
+}  // namespace
 
 extern "C" {
-void __cyg_profile_func_enter (void *func,  void *caller)
-{
+void __cyg_profile_func_enter(void *func,  void *caller) {
     WTF_AUTO_THREAD_ENABLE();
 
     EnsureFunctionNameInCache(caller);
@@ -86,13 +84,11 @@ void __cyg_profile_func_enter (void *func,  void *caller)
     ScopeMap()[FuncNamesMap()[caller]].emplace(std::move(s));
 }
 
-void __cyg_profile_func_exit (void *func, void *caller)
-{
+void __cyg_profile_func_exit(void *func, void *caller) {
     ScopeMap()[FuncNamesMap()[caller]].pop();
 }
-} //extern C
+}  //extern C
 
-void SaveTraceData(const char* filename)
-{
+void SaveTraceData(const char* filename) {
     ::wtf::Runtime::GetInstance()->SaveToFile(filename);
 }

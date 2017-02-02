@@ -1,5 +1,3 @@
-//#include <>
-
 #include "libunwind_wtf.h"
 #include <atomic>
 #include <thread>
@@ -10,23 +8,20 @@
 
 using namespace std;
 
-void bar()
-{
+void bar() {
     static atomic<int> count {1000};
     if (--count > 0)
         bar();
 }
 
-void foo()
-{
+void foo() {
     int x;
     for(x = 0; x < 4; x++)
         bar ();
 }
 
-// FIXME: move main() to a separate file
-int main (int argc, char *argv[])
-{
+// FIXME(vertexodessa): move main() to a separate file
+int main (int argc, char *argv[]) {
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
     vector<thread> v;
