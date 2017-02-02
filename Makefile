@@ -13,7 +13,7 @@ CXXFLAGS += -g2 -std=c++11
 all: clean libunwind_wtf.so test install
 
 clean:
-	rm -f test libunwind_wtf.so
+	rm -f test libunwind_wtf.so *.wtf-trace
 
 libunwind_wtf.so: libunwind_wtf.cc
 	$(CXX) -shared -fPIC $(CXXFLAGS) $(INSTR) libunwind_wtf.cc $(LDFLAGS) $(LIBS) -o libunwind_wtf.so
@@ -23,4 +23,4 @@ test: libunwind_wtf.so test.cc
 
 install: test
 	./test
-	scp *wtf-trace home:/tmp/
+	scp *.wtf-trace home:/tmp/
