@@ -29,6 +29,8 @@
 #define WTF_ENABLE 1
 #include <wtf/macros.h>
 
+#include <cxxabi.h>
+
 using namespace std;
 namespace {
 using Event    = ::wtf::ScopedEventIf<kWtfEnabledForNamespace>;
@@ -63,11 +65,25 @@ inline void EnsureFunctionNameInCache(void* caller) {
     unw_step(&c);
     unw_step(&c);
 
-    thread_local char name[200];
+    constexpr int len = 200;
+    thread_local char mangled_name[len], demangled_name[len];
     unw_word_t offset;
-    unw_get_proc_name(&c, name, 200, &offset);
+    unw_get_proc_name(&c, mangled_name, len, &offset);
 
-    FuncNamesMap()[caller] = name;
+    size_t result_len = len;
+    int status=0;
+
+    char* final_name = mangled_name;
+    abi::__cxa_demangle(mangled_name,
+                        demangled_name, &result_len,
+                        &status);
+
+    if (!status) {
+        final_name = demangled_name;
+        replace(begin(demangled_name), end(mangled_name), ':', '#');
+    }
+
+    FuncNamesMap()[caller] = final_name;
 }
 }  // namespace
 

@@ -4,7 +4,7 @@ add_library(iitracer SHARED src/iitracer.cc)
 set(instrument_FLAGS
   "-finstrument-functions"
   "-finstrument-functions-exclude-file-list=/usr/"
-  "-finstrument-functions-exclude-function-list=static_initialization_and_destruction"
+  "-finstrument-functions-exclude-function-list=static_initialization_and_destruction,main"
 )
 
 target_compile_options(iitracer INTERFACE "${instrument_FLAGS}")
