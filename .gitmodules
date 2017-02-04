@@ -1,0 +1,3 @@
+[submodule "third-party/tracing-framework"]
+	path = third-party/tracing-framework
+	url = https://github.com/google/tracing-framework.git
