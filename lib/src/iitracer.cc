@@ -80,7 +80,7 @@ inline void EnsureFunctionNameInCache(void* caller) {
 
     if (!status) {
         final_name = demangled_name;
-        replace(begin(demangled_name), end(mangled_name), ':', '#');
+        replace(begin(demangled_name), end(demangled_name), ':', '#');
     }
 
     FuncNamesMap()[caller] = final_name;

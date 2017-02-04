@@ -9,7 +9,16 @@
 
 using namespace std;
 
+class A {
+public:
+    void TestMethod() {
+        printf("%s called\n", __PRETTY_FUNCTION__);
+    };
+};
+
 void baz() {
+    A a;
+    a.TestMethod();
     usleep(50);
 }
 
