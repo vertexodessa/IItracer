@@ -5,11 +5,17 @@
 #include <algorithm>
 #include <iostream>
 
+#include <unistd.h>
 
 using namespace std;
 
+void baz() {
+    usleep(50);
+}
+
 void bar() {
-    static atomic<int> count {10000};
+    static atomic<int> count {100};
+    baz();
     if (--count > 0)
         bar();
 }
