@@ -8,3 +8,6 @@ Automatic function tracer that's using GCC instrumentation to install a hook at 
 ## Screenshot
 
 [![Screenshot](https://raw.githubusercontent.com/vertexodessa/iitracer/master/doc/screenshot.png)](https://github.com/vertexodessa/iitracer)
+
+## Overhead information
+--
