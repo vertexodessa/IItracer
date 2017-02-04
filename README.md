@@ -5,6 +5,6 @@ Automatic function tracer that's using GCC instrumentation to install a hook at 
 ## Setup
 -- add setup instructions
 
-## 
+## Screenshot
 
-[![Screenshot](https://path/screen.png)](https://github.com/vertexodessa/iitracer)
+[![Screenshot](https://raw.githubusercontent.com/vertexodessa/iitracer/master/doc/screenshot.png)](https://github.com/vertexodessa/iitracer)
