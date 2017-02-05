@@ -39,21 +39,22 @@ int main (int argc, char *argv[]) {
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
     vector<thread> v;
-    for(int i=0; i<1; ++i)
+    for(int i=0; i<10; ++i)
         v.emplace_back(foo);
 
     foo();
     bar();
 
-    std::chrono::steady_clock::time_point end= std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+    for_each(v.begin(), v.end(), [](thread& f) { f.detach(); }); 
 
-    // sleep(1);
+    // sleep until signal
+    sleep(100000);
     std::cerr << "Time difference = " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << " microseconds" << std::endl;
 
-    // sleep(3);
-    SaveTraceData("tmptestbuf.wtf-trace");
-
-    for_each(v.begin(), v.end(), [](thread& f) { f.join(); }); 
+    // some time to finish dumping
+    sleep(3);
+    //SaveTraceData("tmptestbuf.wtf-trace");
 
     return 0;
 }

@@ -32,9 +32,6 @@
 
 #include <cxxabi.h>
 
-/// TEMP
-#include <unistd.h>
-
 using namespace std;
 namespace {
 using Event    = ::wtf::ScopedEventIf<kWtfEnabledForNamespace>;
@@ -42,21 +39,22 @@ using Scope    = ::wtf::AutoScopeIf<kWtfEnabledForNamespace>;
 using EventPtr = shared_ptr<Event>;
 using ScopePtr = unique_ptr<Scope>;
 
-recursive_mutex gMutex;
-    
 inline unordered_map<string, queue<ScopePtr>>& ScopeMap() __attribute__((no_instrument_function));
 inline unordered_map<string, queue<ScopePtr>>& ScopeMap() {
     // TODO(vertexodessa): measure timings with rwlock and compare
-    static unordered_map<string, queue<ScopePtr>> tlMap {};
-    return tlMap;
+    thread_local unordered_map<string, queue<ScopePtr>> *tlMap {nullptr};
+    if(!tlMap)
+        tlMap = new unordered_map<string, queue<ScopePtr>>();
+    return *tlMap;
 }
 
 inline unordered_map<void*, string>& FuncNamesMap() __attribute__((no_instrument_function));
 inline unordered_map<void*, string>& FuncNamesMap() {
     // TODO(vertexodessa): measure timings with rwlock and compare
-    // FIXME: after owning thread dies, this becomes invalid
-    static unordered_map<void*, string> tlFuncNamesMap {};
-    return tlFuncNamesMap;
+    thread_local unordered_map<void*, string> *tlFuncNamesMap {nullptr};
+    if(!tlFuncNamesMap)
+        tlFuncNamesMap = new unordered_map<void*, string>();
+    return *tlFuncNamesMap;
 }
 
 inline void EnsureFunctionNameInCache(void* caller) __attribute__((no_instrument_function));
@@ -73,14 +71,14 @@ inline void EnsureFunctionNameInCache(void* caller) {
     unw_step(&c);
 
     constexpr int len = 200;
-    char mangled_name[len], demangled_name[len];
+    thread_local char mangled_name[len], demangled_name[len];
     unw_word_t offset;
     unw_get_proc_name(&c, mangled_name, len, &offset);
 
     size_t result_len = len;
     int status=0;
 
-    char* final_name = mangled_name;
+    char const* final_name = mangled_name;
     abi::__cxa_demangle(mangled_name,
                         demangled_name, &result_len,
                         &status);
@@ -99,28 +97,26 @@ inline void EnsureFunctionNameInCache(void* caller) {
 
 condition_variable gShouldDumpCv;
 mutex gShouldDumpMutex;
-bool gShouldDumpBool{false};
 
-void onSignal(int /*signal*/) __attribute__((no_instrument_function));
-void onSignal(int /*signal*/) {
-    // gShouldDumpBool = true;
+void SignalHandler(int /*signal*/) __attribute__((no_instrument_function));
+void SignalHandler(int /*signal*/) {
     gShouldDumpCv.notify_one();
 }
-    void threadFunc()  __attribute__((no_instrument_function));
-    void threadFunc() {
-        unique_lock<mutex> lock(gShouldDumpMutex);
-        gShouldDumpCv.wait(lock);
-        // while (! gShouldDumpBool)
-        //     usleep(1000);
+void WaitForDumpSignal()  __attribute__((no_instrument_function));
+void WaitForDumpSignal() {
+    unique_lock<mutex> lock(gShouldDumpMutex);
+    gShouldDumpCv.wait(lock);
 
-        fprintf(stderr, "dumping\n");
-        SaveTraceData("./_dumped_by_signal.wtf-trace");
-    }
+    // usleep(1000000);
+    char const *filename = "./_dumped_by_signal.wtf-trace";
+    cerr << "Dumping trace data to " << filename << "\n";
+    SaveTraceData(filename);
+}
 
-void SpawnSignalWatcherThread()  __attribute__((no_instrument_function));
-void SpawnSignalWatcherThread() {
-    thread t(threadFunc);
-    signal(SIGUSR1, onSignal);
+void SpawnWatcherThread()  __attribute__((no_instrument_function));
+void SpawnWatcherThread() {
+    thread t(WaitForDumpSignal);
+    signal(SIGUSR1, SignalHandler);
     t.detach();
 }
 }  // namespace
@@ -128,30 +124,24 @@ void SpawnSignalWatcherThread() {
 extern "C" {
 void __cyg_profile_func_enter(void *func,  void *caller) {
     static once_flag flag;
-    call_once(flag, SpawnSignalWatcherThread);
+    call_once(flag, SpawnWatcherThread);
+
     WTF_AUTO_THREAD_ENABLE();
 
-    unique_lock<recursive_mutex> lock(gMutex);
     EnsureFunctionNameInCache(caller);
 
     ::wtf::ScopedEventIf<kWtfEnabledForNamespace> __wtf_scope_event0_35{FuncNamesMap()[caller].c_str()};
     ScopePtr s(new Scope(__wtf_scope_event0_35));
     s->Enter();
 
-    //cerr << "III: " << FuncNamesMap()[caller].c_str()  << '\n';
-
     ScopeMap()[FuncNamesMap()[caller]].emplace(std::move(s));
 }
 
 void __cyg_profile_func_exit(void *func, void *caller) {
-    unique_lock<recursive_mutex> lock(gMutex);
-
     ScopeMap()[FuncNamesMap()[caller]].pop();
 }
 }  //extern C
 
 void SaveTraceData(const char* filename) {
-    unique_lock<recursive_mutex> lock(gMutex);
-
     ::wtf::Runtime::GetInstance()->SaveToFile(filename);
 }
