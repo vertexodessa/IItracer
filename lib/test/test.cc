@@ -12,7 +12,7 @@ using namespace std;
 class A {
 public:
     void TestMethod() {
-        printf("%s called\n", __PRETTY_FUNCTION__);
+        //printf("%s called\n", __PRETTY_FUNCTION__);
     };
 };
 
@@ -39,18 +39,21 @@ int main (int argc, char *argv[]) {
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
     vector<thread> v;
-    for(int i=0; i<3; ++i)
+    for(int i=0; i<1; ++i)
         v.emplace_back(foo);
 
     foo();
     bar();
 
-    for_each(v.begin(), v.end(), [](thread& f) { f.join(); });
-
     std::chrono::steady_clock::time_point end= std::chrono::steady_clock::now();
-    std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << " microseconds" << std::endl;
 
+    // sleep(1);
+    std::cerr << "Time difference = " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << " microseconds" << std::endl;
+
+    // sleep(3);
     SaveTraceData("tmptestbuf.wtf-trace");
+
+    for_each(v.begin(), v.end(), [](thread& f) { f.join(); }); 
 
     return 0;
 }
