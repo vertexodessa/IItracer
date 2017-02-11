@@ -128,6 +128,17 @@ void __cyg_profile_func_enter(void *func,  void *caller) {
 
     WTF_AUTO_THREAD_ENABLE();
 
+    const int kSaveInterval = 1000;
+    static atomic<int> saveCounter(kSaveInterval);
+    if(!saveCounter.fetch_sub(1))
+    {
+        static atomic<int> checkpointIndex(0);
+        std::string filename;
+        filename = "./autosave." + to_string(checkpointIndex.fetch_add(1)) + ".wtf-trace";
+        ::wtf::Runtime::GetInstance()->SaveToFile(filename);
+        saveCounter = kSaveInterval;
+    }
+
     EnsureFunctionNameInCache(caller);
 
     ::wtf::ScopedEventIf<kWtfEnabledForNamespace> __wtf_scope_event0_35{FuncNamesMap()[caller].c_str()};

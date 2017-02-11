@@ -23,7 +23,7 @@ void baz() {
 }
 
 void bar() {
-    static atomic<int> count {100};
+    static atomic<int> count {2000};
     baz();
     if (--count > 0)
         bar();
