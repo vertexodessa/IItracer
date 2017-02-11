@@ -8,6 +8,7 @@ set(instrument_FLAGS
 )
 
 target_compile_options(iitracer INTERFACE "${instrument_FLAGS}")
+target_compile_options(iitracer PRIVATE "-Wall" "-Wextra" )
 
 target_include_directories(iitracer PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -17,6 +18,7 @@ target_include_directories(iitracer PUBLIC
 target_link_libraries(iitracer "-pthread -lunwind -lwtf")
 
 add_executable(iitest test/test.cc)
+target_compile_options(iitest PRIVATE "-Wall" "-Wextra")
 target_link_libraries(iitest "-pthread" iitracer)
 
 

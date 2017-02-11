@@ -7,6 +7,9 @@
 
 #include <unistd.h>
 
+#define SAVE_TRACE_ON_EXIT
+// #define SLEEP_UNTIL_SIGNAL
+
 using namespace std;
 
 class A {
@@ -19,12 +22,12 @@ public:
 void baz() {
     A a;
     a.TestMethod();
-    usleep(50);
+    //usleep(50);
 }
 
 void bar() {
     static atomic<int> count {2000};
-    baz();
+    //baz();
     if (--count > 0)
         bar();
 }
@@ -46,15 +49,21 @@ int main (int argc, char *argv[]) {
     bar();
 
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-    for_each(v.begin(), v.end(), [](thread& f) { f.detach(); }); 
+    for_each(v.begin(), v.end(), [](thread& f) { f.detach(); });
 
-    // sleep until signal
+#if defined (SLEEP_UNTIL_SIGNAL)
     sleep(100000);
+#endif
     std::cerr << "Time difference = " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << " microseconds" << std::endl;
 
-    // some time to finish dumping
+#if defined (SLEEP_UNTIL_SIGNAL)
+    // sleep until signal
     sleep(3);
-    //SaveTraceData("tmptestbuf.wtf-trace");
+#endif
+#if defined (SAVE_TRACE_ON_EXIT)
+    SaveTraceData("tmptestbuf.wtf-trace");
+#endif
 
+    sleep(1);
     return 0;
 }

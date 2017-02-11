@@ -16,11 +16,13 @@
 
 #include <algorithm>
 #include <condition_variable>
+#include <fstream>
 #include <memory>
 #include <queue>
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -39,9 +41,32 @@ using Scope    = ::wtf::AutoScopeIf<kWtfEnabledForNamespace>;
 using EventPtr = shared_ptr<Event>;
 using ScopePtr = unique_ptr<Scope>;
 
+// not modifyable after initialization
+inline unordered_set<string>& NameBlackList() __attribute__((no_instrument_function));
+inline unordered_set<string>& NameBlackList() {
+    static unordered_set<string> sSet;
+    return sSet;
+}
+
+static void init() __attribute__((constructor))  __attribute__((no_instrument_function));
+void init() {
+    // TODO: read a file with blacklisted function names
+    cout << "Initializing blacklist\n";
+    std::ifstream infile("./blacklist.txt");
+    std::string line;
+    if (!infile) {
+        cout << "Failed to open blacklist.txt for reading\n";
+    }
+    while (std::getline(infile, line)) {
+        cout << "Blacklisting a function: " << line << "\n";
+        NameBlackList().insert(line);
+    }
+    cout << "done initializing\n";
+}
+
 inline unordered_map<string, queue<ScopePtr>>& ScopeMap() __attribute__((no_instrument_function));
 inline unordered_map<string, queue<ScopePtr>>& ScopeMap() {
-    // TODO(vertexodessa): measure timings with rwlock and compare
+    // TODO(vertexodessa): measure timings with rwlock (not thread-local) and compare
     thread_local unordered_map<string, queue<ScopePtr>> *tlMap {nullptr};
     if(!tlMap)
         tlMap = new unordered_map<string, queue<ScopePtr>>();
@@ -119,37 +144,59 @@ void SpawnWatcherThread() {
     signal(SIGUSR1, SignalHandler);
     t.detach();
 }
-}  // namespace
 
-extern "C" {
-void __cyg_profile_func_enter(void *func,  void *caller) {
-    static once_flag flag;
-    call_once(flag, SpawnWatcherThread);
+inline void MaybeSaveTrace() __attribute__((no_instrument_function));
+inline void MaybeSaveTrace()
+{
+    static const char* saveInterval = getenv("IITRACER_SAVE_INTERVAL");
+    constexpr int kDefaultSaveInterval = 1000;
+    static int interval =
+        (saveInterval && *saveInterval == '0') ?
+        std::atoi(saveInterval) : kDefaultSaveInterval;
 
-    WTF_AUTO_THREAD_ENABLE();
-
-    const int kSaveInterval = 1000;
-    static atomic<int> saveCounter(kSaveInterval);
+    static atomic<int> saveCounter(interval);
     if(!saveCounter.fetch_sub(1))
     {
         static atomic<int> checkpointIndex(0);
         std::string filename;
         filename = "./autosave." + to_string(checkpointIndex.fetch_add(1)) + ".wtf-trace";
         ::wtf::Runtime::GetInstance()->SaveToFile(filename);
-        saveCounter = kSaveInterval;
+        saveCounter = interval;
     }
+}
+
+}  // namespace
+
+extern "C" {
+
+void __cyg_profile_func_enter(void */*func*/,  void *caller) {
+    static once_flag flag;
+    call_once(flag, SpawnWatcherThread);
+
+    WTF_AUTO_THREAD_ENABLE();
 
     EnsureFunctionNameInCache(caller);
 
-    ::wtf::ScopedEventIf<kWtfEnabledForNamespace> __wtf_scope_event0_35{FuncNamesMap()[caller].c_str()};
+    const string& funcName = FuncNamesMap()[caller];
+    if (NameBlackList().find(funcName) != NameBlackList().end())
+        return;
+
+    MaybeSaveTrace();
+    // cout << "func not blacklisted: "<< funcName << "\n";
+
+    ::wtf::ScopedEventIf<kWtfEnabledForNamespace> __wtf_scope_event0_35{funcName.c_str()};
     ScopePtr s(new Scope(__wtf_scope_event0_35));
     s->Enter();
 
     ScopeMap()[FuncNamesMap()[caller]].emplace(std::move(s));
 }
 
-void __cyg_profile_func_exit(void *func, void *caller) {
-    ScopeMap()[FuncNamesMap()[caller]].pop();
+void __cyg_profile_func_exit(void */*func*/, void *caller) {
+    const string& funcName = FuncNamesMap()[caller];
+    if (NameBlackList().find(funcName) != NameBlackList().end())
+        return;
+
+    ScopeMap()[funcName].pop();
 }
 }  //extern C
 
