@@ -7,6 +7,7 @@ Automatic function tracer that's using GCC instrumentation to install a hook at 
 
 
 ## Setup and run
+# Build instructions
 ```bash
 # first, build and install Google Tracing Framework
 git clone https://github.com/vertexodessa/iitracer.git
@@ -33,3 +34,11 @@ LD_PRELOAD=/usr/local/lib/iitracer.so ./your_app
 ## Overhead information
 
 On linux laptop with Intel i7 CPU, overhead is ~0.5ms for the first function call(which caches the demangled function name) and ~0.001 ms for subsequent function calls.
+
+## TODO:
+- Create a script to analyze shortest functions calls and blacklist them
+- Refactoring: split to more files
+- Is it really necessary to mark every function of the library as "no_instrument"? Maybe just build the library without the -finstrument-functions.
+- Consider using read-write locks instead of thread-local storages to avoid memory leaks.
+- find and fix BUGS! :)
+
