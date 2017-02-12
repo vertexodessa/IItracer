@@ -12,162 +12,28 @@
   ---------------------------------------------------------------------------------
 */
 
-#include "iitracer.h"
+#include "utils.h"
 
-#include <algorithm>
-#include <condition_variable>
 #include <fstream>
-#include <memory>
-#include <queue>
-#include <set>
-#include <string>
-#include <unordered_map>
-#include <unordered_set>
-#include <utility>
-#include <vector>
-
-#define UNW_LOCAL_ONLY
-#include <libunwind.h>
-
-#define WTF_ENABLE 1
-#include <wtf/macros.h>
-
-#include <cxxabi.h>
 
 using namespace std;
-namespace {
-using Event    = ::wtf::ScopedEventIf<kWtfEnabledForNamespace>;
-using Scope    = ::wtf::AutoScopeIf<kWtfEnabledForNamespace>;
-using EventPtr = shared_ptr<Event>;
-using ScopePtr = unique_ptr<Scope>;
+using namespace Utils;
 
-// not modifyable after initialization
-inline unordered_set<string>& NameBlackList() __attribute__((no_instrument_function));
-inline unordered_set<string>& NameBlackList() {
-    static unordered_set<string> sSet;
-    return sSet;
-}
-
-static void init() __attribute__((constructor))  __attribute__((no_instrument_function));
+extern "C" {
+void init() __attribute__((constructor))  __attribute__((no_instrument_function));
 void init() {
-    // TODO: read a file with blacklisted function names
     cout << "Initializing blacklist\n";
-    std::ifstream infile("./blacklist.txt");
-    std::string line;
+    ifstream infile("./blacklist.txt");
+    string line;
     if (!infile) {
         cout << "Failed to open blacklist.txt for reading\n";
     }
-    while (std::getline(infile, line)) {
+    while (getline(infile, line)) {
         cout << "Blacklisting a function: " << line << "\n";
         NameBlackList().insert(line);
     }
     cout << "done initializing\n";
 }
-
-inline unordered_map<string, queue<ScopePtr>>& ScopeMap() __attribute__((no_instrument_function));
-inline unordered_map<string, queue<ScopePtr>>& ScopeMap() {
-    // TODO(vertexodessa): measure timings with rwlock (not thread-local) and compare
-    thread_local unordered_map<string, queue<ScopePtr>> *tlMap {nullptr};
-    if(!tlMap)
-        tlMap = new unordered_map<string, queue<ScopePtr>>();
-    return *tlMap;
-}
-
-inline unordered_map<void*, string>& FuncNamesMap() __attribute__((no_instrument_function));
-inline unordered_map<void*, string>& FuncNamesMap() {
-    // TODO(vertexodessa): measure timings with rwlock and compare
-    thread_local unordered_map<void*, string> *tlFuncNamesMap {nullptr};
-    if(!tlFuncNamesMap)
-        tlFuncNamesMap = new unordered_map<void*, string>();
-    return *tlFuncNamesMap;
-}
-
-inline void EnsureFunctionNameInCache(void* caller) __attribute__((no_instrument_function));
-inline void EnsureFunctionNameInCache(void* caller) {
-    if (FuncNamesMap().find(caller) != FuncNamesMap().end())
-        return;
-
-    // FIXME(vertexodessa): handle errors appropriately
-    unw_context_t ctx;
-    unw_cursor_t c;
-    unw_getcontext(&ctx);
-    unw_init_local(&c, &ctx);
-    unw_step(&c);
-    unw_step(&c);
-
-    constexpr int len = 200;
-    thread_local char mangled_name[len], demangled_name[len];
-    unw_word_t offset;
-    unw_get_proc_name(&c, mangled_name, len, &offset);
-
-    size_t result_len = len;
-    int status=0;
-
-    char const* final_name = mangled_name;
-    abi::__cxa_demangle(mangled_name,
-                        demangled_name, &result_len,
-                        &status);
-
-    if (!status) {
-        final_name = demangled_name;
-        replace(begin(demangled_name), end(demangled_name), ':', '#');
-    }
-    if (!final_name)
-        final_name = mangled_name;
-    if (!final_name)
-        final_name = "Unknown";
-
-    FuncNamesMap()[caller] = final_name;
-}
-
-condition_variable gShouldDumpCv;
-mutex gShouldDumpMutex;
-
-void SignalHandler(int /*signal*/) __attribute__((no_instrument_function));
-void SignalHandler(int /*signal*/) {
-    gShouldDumpCv.notify_one();
-}
-void WaitForDumpSignal()  __attribute__((no_instrument_function));
-void WaitForDumpSignal() {
-    unique_lock<mutex> lock(gShouldDumpMutex);
-    gShouldDumpCv.wait(lock);
-
-    // usleep(1000000);
-    char const *filename = "./_dumped_by_signal.wtf-trace";
-    cerr << "Dumping trace data to " << filename << "\n";
-    SaveTraceData(filename);
-}
-
-void SpawnWatcherThread()  __attribute__((no_instrument_function));
-void SpawnWatcherThread() {
-    thread t(WaitForDumpSignal);
-    signal(SIGUSR1, SignalHandler);
-    t.detach();
-}
-
-inline void MaybeSaveTrace() __attribute__((no_instrument_function));
-inline void MaybeSaveTrace()
-{
-    static const char* saveInterval = getenv("IITRACER_SAVE_INTERVAL");
-    constexpr int kDefaultSaveInterval = 1000;
-    static int interval =
-        (saveInterval && *saveInterval == '0') ?
-        std::atoi(saveInterval) : kDefaultSaveInterval;
-
-    static atomic<int> saveCounter(interval);
-    if(!saveCounter.fetch_sub(1))
-    {
-        static atomic<int> checkpointIndex(0);
-        std::string filename;
-        filename = "./autosave." + to_string(checkpointIndex.fetch_add(1)) + ".wtf-trace";
-        ::wtf::Runtime::GetInstance()->SaveToFile(filename);
-        saveCounter = interval;
-    }
-}
-
-}  // namespace
-
-extern "C" {
 
 void __cyg_profile_func_enter(void */*func*/,  void *caller) {
     static once_flag flag;
@@ -175,31 +41,28 @@ void __cyg_profile_func_enter(void */*func*/,  void *caller) {
 
     WTF_AUTO_THREAD_ENABLE();
 
-    EnsureFunctionNameInCache(caller);
+    EnsureFunctionNameCached(caller);
 
     const string& funcName = FuncNamesMap()[caller];
-    if (NameBlackList().find(funcName) != NameBlackList().end())
+
+    if(IsBlackListed(funcName))
         return;
 
     MaybeSaveTrace();
-    // cout << "func not blacklisted: "<< funcName << "\n";
 
-    ::wtf::ScopedEventIf<kWtfEnabledForNamespace> __wtf_scope_event0_35{funcName.c_str()};
-    ScopePtr s(new Scope(__wtf_scope_event0_35));
-    s->Enter();
-
-    ScopeMap()[FuncNamesMap()[caller]].emplace(std::move(s));
+    EnterEventScope(funcName, caller);
 }
 
 void __cyg_profile_func_exit(void */*func*/, void *caller) {
     const string& funcName = FuncNamesMap()[caller];
-    if (NameBlackList().find(funcName) != NameBlackList().end())
+
+    if (IsBlackListed(funcName))
         return;
 
-    ScopeMap()[funcName].pop();
+    LeaveEventScope(funcName, caller);
 }
-}  //extern C
 
 void SaveTraceData(const char* filename) {
-    ::wtf::Runtime::GetInstance()->SaveToFile(filename);
+    SaveToFile(filename);
 }
+}  //extern C

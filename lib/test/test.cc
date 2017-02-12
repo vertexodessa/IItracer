@@ -26,8 +26,8 @@ void baz() {
 }
 
 void bar() {
-    static atomic<int> count {2000};
-    //baz();
+    static atomic<int> count {200};
+    baz();
     if (--count > 0)
         bar();
 }
@@ -38,7 +38,7 @@ void foo() {
         bar ();
 }
 
-int main (int argc, char *argv[]) {
+int main (int /*argc*/, char** /*argv*/) {
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
     vector<thread> v;

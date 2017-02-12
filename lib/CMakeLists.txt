@@ -1,11 +1,11 @@
-
-add_library(iitracer SHARED src/iitracer.cc)
+add_library(iitracer SHARED src/iitracer.cc src/utils.cc)
+add_executable(iitest test/test.cc)
 
 set(instrument_FLAGS
   "-finstrument-functions"
   "-finstrument-functions-exclude-file-list=/usr/"
-  "-finstrument-functions-exclude-function-list=static_initialization_and_destruction,main"
-)
+  "-finstrument-functions-exclude-function-list=static_initialization_and_destruction"
+  )
 
 target_compile_options(iitracer INTERFACE "${instrument_FLAGS}")
 target_compile_options(iitracer PRIVATE "-Wall" "-Wextra" )
@@ -17,7 +17,6 @@ target_include_directories(iitracer PUBLIC
 
 target_link_libraries(iitracer "-pthread -lunwind -lwtf")
 
-add_executable(iitest test/test.cc)
 target_compile_options(iitest PRIVATE "-Wall" "-Wextra")
 target_link_libraries(iitest "-pthread" iitracer)
 
