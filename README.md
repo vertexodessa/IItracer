@@ -6,8 +6,25 @@ Automatic function tracer that's using GCC instrumentation to install a hook at 
 - CMake 3.1
 
 
-## Setup
--- add setup instructions
+## Setup and run
+```bash
+# first, build and install Google Tracing Framework
+git clone https://github.com/vertexodessa/iitracer.git
+cd iitracer
+pushd .
+cd third-party
+./build.sh
+popd
+# build iitracer and test
+mkdir build; cd build
+cmake ..
+make
+sudo make install
+# build your application with following flags:
+  "-finstrument-functions -finstrument-functions-exclude-file-list=/usr/ -finstrument-functions-exclude-function-list=static_initialization_and_destruction,main"
+# Launch your app:
+LD_PRELOAD=/usr/local/lib/iitracer.so ./your_app
+```
 
 ## Screenshot
 
