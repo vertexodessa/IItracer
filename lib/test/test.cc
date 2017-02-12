@@ -27,7 +27,7 @@ void baz() {
 
 void bar() {
     static atomic<int> count {2000};
-    //baz();
+    baz();
     if (--count > 0)
         bar();
 }
@@ -38,7 +38,7 @@ void foo() {
         bar ();
 }
 
-int main (int argc, char *argv[]) {
+int main (int /*argc*/, char** /*argv*/) {
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
     vector<thread> v;
@@ -49,7 +49,14 @@ int main (int argc, char *argv[]) {
     bar();
 
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-    for_each(v.begin(), v.end(), [](thread& f) { f.detach(); });
+
+    for_each(v.begin(), v.end(), [](thread& f) {
+#if defined (SLEEP_UNTIL_SIGNAL)
+            f.detach();
+#else
+            f.join();
+#endif
+        });
 
 #if defined (SLEEP_UNTIL_SIGNAL)
     sleep(100000);
