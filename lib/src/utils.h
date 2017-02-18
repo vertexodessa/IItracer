@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <string.h>
 
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
@@ -21,10 +22,15 @@
 // TODO
 #endif
 
+#include <cctype>
+
 #include <cxxabi.h>
+
+#include "rwlock.h"
 
 namespace Utils {
 
+extern rwlock gFuncNamesLock;
 
 #if defined(WTF_ENABLE)
 using Event    = ::wtf::ScopedEventIf<kWtfEnabledForNamespace>;
@@ -56,18 +62,22 @@ inline std::unordered_map<std::string, std::queue<ScopedEventPtr>>& ScopedEvents
 
 inline std::unordered_map<void*, std::string>& FuncNamesMap() __attribute__((no_instrument_function));
 inline std::unordered_map<void*, std::string>& FuncNamesMap() {
-    // TODO(vertexodessa): measure timings with rwlock and compare
-    thread_local std::unordered_map<void*, std::string> *tlFuncNamesMap {nullptr};
-    if(!tlFuncNamesMap)
-        tlFuncNamesMap = new std::unordered_map<void*, std::string>();
-    return *tlFuncNamesMap;
+    /* thread_local std::unordered_map<void*, std::string> *tlMap {nullptr}; */
+    /* if(!tlMap) */
+    /*     tlMap = new std::unordered_map<void*, std::string>(); */
+    /* return *tlMap; */
+
+    static std::unordered_map<void*, std::string> sMap;
+    return sMap;
 }
 
 inline void EnsureFunctionNameCached(void* caller) __attribute__((no_instrument_function));
 inline void EnsureFunctionNameCached(void* caller) {
-    if (FuncNamesMap().find(caller) != FuncNamesMap().end())
-        return;
-
+    {
+        std::unique_lock<rwlock> lock(gFuncNamesLock);
+        if (FuncNamesMap().find(caller) != FuncNamesMap().end())
+            return;
+    }
     // FIXME(vertexodessa): handle errors appropriately
     unw_context_t ctx;
     unw_cursor_t c;
@@ -77,28 +87,41 @@ inline void EnsureFunctionNameCached(void* caller) {
     unw_step(&c);
 
     constexpr int len = 200;
-    thread_local char mangled_name[len], demangled_name[len];
+    thread_local char mangled_name[len];
+    /*thread_local char* demangled_name = (char*)malloc(len); // LEAKS!!*/
     unw_word_t offset;
-    unw_get_proc_name(&c, mangled_name, len, &offset);
+    bool unwound = !unw_get_proc_name(&c, mangled_name, len, &offset);
 
-    size_t result_len = len;
-    int status=0;
+    /*thread_local */size_t result_len = len;
+    int status = 0;
 
     char const* final_name = mangled_name;
-    abi::__cxa_demangle(mangled_name,
-                        demangled_name, &result_len,
+
+    std::string s = std::to_string((intptr_t)caller);
+    if (!unwound)
+        final_name = s.c_str();
+    char* demangled_name = abi::__cxa_demangle(final_name,
+                        NULL, NULL,
                         &status);
 
-    if (!status) {
+    result_len = strlen(demangled_name ?: final_name);
+
+    if (demangled_name && !status) {
         final_name = demangled_name;
-        std::replace(std::begin(demangled_name), std::end(demangled_name), ':', '#');
+        std::replace(demangled_name, demangled_name + result_len, ':', '#');
+        std::replace(demangled_name, demangled_name + result_len, ',', '.');
     }
-    if (!final_name)
-        final_name = mangled_name;
-    if (!final_name)
-        final_name = "Unknown";
+
+    unique_write_lock lock(gFuncNamesLock);
+
+    // Another thread could possibly cache the function name already
+    if (FuncNamesMap().find(caller) != FuncNamesMap().end())
+        return;
 
     FuncNamesMap()[caller] = final_name;
+
+    if(demangled_name)
+        free(demangled_name);
 }
 
 inline void EnterEventScope(const std::string& funcName, void* caller) __attribute__((no_instrument_function));
@@ -111,7 +134,7 @@ inline void EnterEventScope(const std::string& funcName, void* caller) {
     // TODO
 #endif
 
-    ScopedEventsMap()[FuncNamesMap()[caller]].emplace(move(s));
+    ScopedEventsMap()[funcName].emplace(move(s));
 }
 
 inline void LeaveEventScope(const std::string& funcName, void* /*caller*/) __attribute__((no_instrument_function));

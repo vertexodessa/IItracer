@@ -16,6 +16,8 @@
 
 #include <fstream>
 
+#include "rwlock.h"
+
 using namespace std;
 using namespace Utils;
 
@@ -43,6 +45,7 @@ void __cyg_profile_func_enter(void */*func*/,  void *caller) {
 
     EnsureFunctionNameCached(caller);
 
+    unique_lock<rwlock> lock(gFuncNamesLock);
     const string& funcName = FuncNamesMap()[caller];
 
     if(IsBlackListed(funcName))
@@ -54,6 +57,7 @@ void __cyg_profile_func_enter(void */*func*/,  void *caller) {
 }
 
 void __cyg_profile_func_exit(void */*func*/, void *caller) {
+    unique_lock<rwlock> lock(gFuncNamesLock);
     const string& funcName = FuncNamesMap()[caller];
 
     if (IsBlackListed(funcName))

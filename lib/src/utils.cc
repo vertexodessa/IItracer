@@ -27,6 +27,8 @@ void WaitForDumpSignal() {
 }
 } //namespace
 
+rwlock Utils::gFuncNamesLock;
+
 void Utils::SpawnWatcherThread() {
     thread t(WaitForDumpSignal);
     signal(SIGUSR1, SignalHandler);
