@@ -8,14 +8,15 @@ set(instrument_FLAGS
   )
 
 target_compile_options(iitracer INTERFACE "${instrument_FLAGS}")
-target_compile_options(iitracer PRIVATE "-Wall" "-Wextra" )
+target_compile_options(iitracer PRIVATE "-Wall" "-Wextra" "-DUSE_EASY_PROFILER=1" )
 
 target_include_directories(iitracer PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
   PRIVATE src)
 
-target_link_libraries(iitracer "-pthread -lunwind -lwtf")
+#target_link_libraries(iitracer "-pthread -lunwind -lwtf")
+target_link_libraries(iitracer "-pthread -lunwind -leasy_profiler")
 
 target_compile_options(iitest PRIVATE "-Wall" "-Wextra")
 target_link_libraries(iitest "-pthread" iitracer)

@@ -14,11 +14,36 @@
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
 
+#if !defined(USE_EASY_PROFILER)
 #define WTF_ENABLE 1
 #define WTF_PTHREAD_THREADED 1
+#endif
+
 #if defined(WTF_ENABLE)
 #include <wtf/macros.h>
+#define IITRACER_AUTO_THREAD_ENABLE() WTF_AUTO_THREAD_ENABLE()
 #else
+#define BUILD_WITH_EASY_PROFILER 1
+#include <easy/profiler.h>
+
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/syscall.h>
+
+inline uint32_t getCurrentThreadId()
+{
+#ifdef _WIN32
+    return (uint32_t)::GetCurrentThreadId();
+#else
+    EASY_THREAD_LOCAL static const pid_t x = syscall(__NR_gettid);
+    EASY_THREAD_LOCAL static const uint32_t _id = (uint32_t)x;//std::hash<std::thread::id>()(std::this_thread::get_id());
+    return _id;
+#endif
+}
+
+#define IITRACER_AUTO_THREAD_ENABLE() \
+    static std::string _____S___(std::to_string(getCurrentThreadId())); \
+    EASY_THREAD(_____S___.c_str())// FIXME!!!!!
 // TODO
 #endif
 
@@ -36,9 +61,10 @@ extern rwlock gFuncNamesLock;
 using Event    = ::wtf::ScopedEventIf<kWtfEnabledForNamespace>;
 using Scope    = ::wtf::AutoScopeIf<kWtfEnabledForNamespace>;
 #else
+using Event    = ::profiler::BaseBlockDescriptor;
+using Scope    = ::profiler::Block;
 // TODO
 #endif
-using EventPtr = std::shared_ptr<Event>;
 using ScopedEventPtr = std::unique_ptr<Scope>;
 
 void SpawnWatcherThread() __attribute__((no_instrument_function));
@@ -127,18 +153,38 @@ inline void EnsureFunctionNameCached(void* caller) {
 inline void EnterEventScope(const std::string& funcName, void* caller) __attribute__((no_instrument_function));
 inline void EnterEventScope(const std::string& funcName, void* caller) {
 #if defined(WTF_ENABLE)
-    ::wtf::ScopedEventIf<kWtfEnabledForNamespace> __wtf_scope_event0_35{funcName.c_str()};
-    ScopedEventPtr s(new Scope(__wtf_scope_event0_35));
+    Event event{funcName.c_str()};
+    ScopedEventPtr s(new Scope(event));
     s->Enter();
 #else
+    static std::atomic<uint32_t> a_counter{0};
+    uint32_t counter = a_counter.fetch_add(1);
+    
+    std::string unique_descr("event_");
+    unique_descr += counter;
+    
+    const ::profiler::BaseBlockDescriptor* unique_profiler_descriptor_130 =
+        ::profiler::registerDescription(
+            profiler::FORCE_ON/*::profiler::extract_enable_flag(profiler::colors::Magenta)*/,
+            unique_descr.c_str(),
+            funcName.c_str(),
+            "event_",
+            counter,
+            ::profiler::BLOCK_TYPE_BLOCK,
+            profiler::colors::Magenta,
+            false); // TODO: copy the string (false --> true) ??
+    ScopedEventPtr s(new Scope(unique_profiler_descriptor_130 ,""));
+    ::profiler::beginBlock(*s);;
     // TODO
 #endif
-
-    ScopedEventsMap()[funcName].emplace(move(s));
+    /* printf("Entering %s\n", funcName.c_str()); */
+    ScopedEventsMap()[funcName].emplace(std::move(s));
 }
 
 inline void LeaveEventScope(const std::string& funcName, void* /*caller*/) __attribute__((no_instrument_function));
 inline void LeaveEventScope(const std::string& funcName, void* /*caller*/) {
+    /* printf("Leaving %s\n", funcName.c_str()); */
+    
     ScopedEventsMap()[funcName].pop();
 }
 

@@ -24,24 +24,30 @@ using namespace Utils;
 extern "C" {
 void init() __attribute__((constructor))  __attribute__((no_instrument_function));
 void init() {
-    cout << "Initializing blacklist\n";
+    printf("Initializing blacklist\n");
     ifstream infile("./blacklist.txt");
     string line;
     if (!infile) {
-        cout << "Failed to open blacklist.txt for reading\n";
+        printf("Failed to open blacklist.txt for reading\n");
     }
     while (getline(infile, line)) {
-        cout << "Blacklisting a function: " << line << "\n";
+        printf("Blacklisting a function: "); printf("%s", line.c_str()); printf("\n");
         NameBlackList().insert(line);
     }
-    cout << "done initializing\n";
+    printf("done initializing\n");
 }
 
 void __cyg_profile_func_enter(void */*func*/,  void *caller) {
     static once_flag flag;
     call_once(flag, SpawnWatcherThread);
 
-    WTF_AUTO_THREAD_ENABLE();
+    /// TEMP
+    thread_local bool enabled = false;
+    if (!enabled) {
+        printf("Enabling thread %d", getCurrentThreadId());
+        IITRACER_AUTO_THREAD_ENABLE();
+        enabled = true;
+    }
 
     EnsureFunctionNameCached(caller);
 

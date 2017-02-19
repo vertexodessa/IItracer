@@ -30,6 +30,7 @@ void WaitForDumpSignal() {
 rwlock Utils::gFuncNamesLock;
 
 void Utils::SpawnWatcherThread() {
+    ::profiler::setEnabled(true);; /// ????
     thread t(WaitForDumpSignal);
     signal(SIGUSR1, SignalHandler);
     t.detach();
@@ -39,6 +40,8 @@ void Utils::SaveToFile(const char* filename) {
 #if defined(WTF_ENABLE)
     ::wtf::Runtime::GetInstance()->SaveToFile(filename);
 #else
+    auto blocks_count = profiler::dumpBlocksToFile("test.prof");
+    std::cout << "Blocks count: " << blocks_count << std::endl;
     // TODO
 #endif
 }
