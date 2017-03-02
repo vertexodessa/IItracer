@@ -1,10 +1,13 @@
 #include "utils.h"
+#include "proc_maps.h"
 #include "iitracer.h"
 
 #include <condition_variable>
 #include <mutex>
 #include <thread>
 #include <signal.h>
+
+#include <sstream>
 
 using namespace std;
 
@@ -25,6 +28,9 @@ void WaitForDumpSignal() {
     cerr << "Dumping trace data to " << filename << "\n";
     Utils::SaveToFile(filename);
 }
+
+vector <ProcMaps::Entry> gLibraryMappings;
+
 } //namespace
 
 
@@ -40,7 +46,7 @@ void SpawnWatcherThread() {
     t.detach();
 }
 
-void SaveToFile(const char* filename) {
+    void SaveToFile(const char* filename) {
 #if defined(WTF_ENABLE)
     ::wtf::Runtime::GetInstance()->SaveToFile(filename);
 #else
@@ -58,7 +64,25 @@ void EnsureFunctionNameCached(void* caller) {
     }
 
 // TEMPORARY!!!! TESTING PURPOSES!
+    /// with offset to the library
+    {
+        intptr_t caller_ = (intptr_t)caller;
+        const ProcMaps::Entry& e = ProcMaps::find(caller_);
+        // printf("caller: %p, e.start_ %lx\n", caller_, e.start_);
+        std::stringstream ss;
+        ss << std::hex << caller_ - e.start_;
+        std::string result = ss.str();
 
+        std::string s = e.path_ + '@' + ss.str();
+        unique_write_lock lock(gFuncNamesLock);
+        // Another thread could possibly cache the function name already
+        if (FuncNamesMap().find(caller) != FuncNamesMap().end())
+            return;
+        FuncNamesMap()[caller] = s;
+        return;
+    }
+
+    /// raw pointer
     {std::string s = std::to_string((intptr_t)caller);
     unique_write_lock lock(gFuncNamesLock);
     // Another thread could possibly cache the function name already

@@ -13,6 +13,7 @@
 */
 
 #include "utils.h"
+#include "proc_maps.h"
 
 #include <fstream>
 
@@ -34,6 +35,7 @@ void init() {
         printf("Blacklisting a function: "); printf("%s", line.c_str()); printf("\n");
         NameBlackList().insert(line);
     }
+    ProcMaps::InitLibraryMappings();
     printf("done initializing\n");
 }
 

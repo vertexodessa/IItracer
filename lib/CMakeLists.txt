@@ -1,4 +1,4 @@
-add_library(iitracer SHARED src/iitracer.cc src/utils.cc)
+add_library(iitracer SHARED src/iitracer.cc src/utils.cc src/proc_maps.cc)
 add_executable(iitest test/test.cc)
 
 set(instrument_FLAGS
