@@ -41,10 +41,12 @@ void __cyg_profile_func_enter(void */*func*/,  void *caller) {
     static once_flag flag;
     call_once(flag, SpawnWatcherThread);
 
-    /// TEMP
     thread_local bool enabled = false;
     if (!enabled) {
+#if defined (BUILD_WITH_EASY_PROFILER)
+        // cout might be not yet initialized; have to use printf()
         printf("Enabling thread %d", getCurrentThreadId());
+#endif
         IITRACER_AUTO_THREAD_ENABLE();
         enabled = true;
     }
